@@ -11,6 +11,8 @@
 
 #include <GLFW/glfw3.h>
 
+#define GLTF
+
 #ifdef GLTF
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
@@ -46,6 +48,7 @@ struct Vertex
 	float px, py, pz;
 	float nx, ny, nz;
 	float tx, ty;
+	float r, g, b;
 };
 
 struct Mesh
@@ -227,7 +230,7 @@ Mesh parseGltf(const char* path)
 				{
 					result.vertices[vertex_offset + i].px = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8] + transform[12];
 					result.vertices[vertex_offset + i].py = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9] + transform[13];
-					result.vertices[vertex_offset + i].pz = ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10] + transform[14];
+					result.vertices[vertex_offset + i].pz = -(ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10] + transform[14]);
 					ptr += ap->stride / 4;
 				}
 			}
@@ -254,6 +257,19 @@ Mesh parseGltf(const char* path)
 					result.vertices[vertex_offset + i].tx = ptr[0];
 					result.vertices[vertex_offset + i].ty = ptr[1];
 					ptr += at->stride / 4;
+				}
+			}
+
+			if (cgltf_accessor* ac = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_color))
+			{
+				const float* ptr = getComponentPtr<float>(ac);
+
+				for (size_t i = 0; i < ap->count; ++i)
+				{
+					result.vertices[vertex_offset + i].r = ptr[0];
+					result.vertices[vertex_offset + i].g = ptr[1];
+					result.vertices[vertex_offset + i].b = ptr[2];
+					ptr += ac->stride / 4;
 				}
 			}
 
@@ -324,14 +340,22 @@ Mesh optimize(const Mesh& mesh, int lod)
 {
 	float threshold = powf(0.5f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
-	float target_error = 1e-2f;
+	float target_error = 100;
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
 	result.loop.resize(result.vertices.size());
 	meshopt_simplifyDebugKind = &result.kinds[0];
 	meshopt_simplifyDebugLoop = &result.loop[0];
-	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+
+	// result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+	float attribute_weights[8] =
+	{
+		0, 0, // uv
+		0, 0, 0, // normal
+		0.1, 0.1, 0.1, // color
+	};
+	result.indices.resize(meshopt_simplifyWithAttributes(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, attribute_weights, 8));
 
 	return result;
 }
@@ -418,7 +442,7 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 			break;
 
 		default:
-			glColor3f(intensity, intensity, intensity);
+			glColor3f(v.r, v.g, v.b);
 			glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 		}
 	}
@@ -607,6 +631,7 @@ int main(int argc, char** argv)
 			glClearDepth(1.f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+			/*
 			int cols = int(ceil(sqrt(double(files.size()))));
 			int rows = int(ceil(double(files.size()) / cols));
 
@@ -621,6 +646,13 @@ int main(int argc, char** argv)
 
 				display(x * tilew, y * tileh, tilew, tileh, f.lodmesh, options);
 			}
+			*/
+
+			Options opt = options;
+			opt.mode = Options::Mode_Default;
+			display(0, 0, width / 2, height, files[0].lodmesh, opt);
+			opt.mode = Options::Mode_Normals;
+			display(width / 2, 0, width / 2, height, files[0].lodmesh, opt);
 
 			glfwSwapBuffers(window);
 		}

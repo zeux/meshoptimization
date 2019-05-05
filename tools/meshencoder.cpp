@@ -185,6 +185,35 @@ int main(int argc, char** argv)
 	std::vector<Vertex> vertices(total_vertices);
 	meshopt_remapVertexBuffer(&vertices[0], &triangles[0], total_indices, sizeof(Vertex), &remap[0]);
 
+	std::vector<float> positions(total_vertices * 3);
+	for (size_t i = 0; i < total_vertices; ++i)
+	{
+		positions[i * 3 + 0] = float(vertices[i].px) / float((1 << pos_bits) - 1) * pos_scale + pos_offset[0];
+		positions[i * 3 + 1] = float(vertices[i].py) / float((1 << pos_bits) - 1) * pos_scale + pos_offset[1];
+		positions[i * 3 + 2] = float(vertices[i].pz) / float((1 << pos_bits) - 1) * pos_scale + pos_offset[2];
+	}
+
+	if (1)
+	{
+		std::vector<unsigned int> lodib;
+
+		for (size_t i = 0; i < file.g_size; ++i)
+		{
+			ObjGroup& g = file.g[i];
+
+			std::vector<unsigned int> lod(g.index_count);
+			lod.resize(meshopt_simplify(&lod[0], &indices[g.index_offset], g.index_count, &positions[0], total_vertices, sizeof(float) * 3, g.index_count / 10, 1e-2f));
+
+			g.index_offset = lodib.size();
+			g.index_count = lod.size();
+			lodib.insert(lodib.end(), lod.begin(), lod.end());
+		}
+
+		indices = lodib;
+	}
+
+	printf("%d\n", int(indices.size() / 3));
+
 	for (size_t i = 0; i < file.g_size; ++i)
 	{
 		ObjGroup& g = file.g[i];
