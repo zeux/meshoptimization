@@ -509,7 +509,7 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 		float a = v.a[k];
 
 		r += a * a * Q.w;
-		r -= 2 * a * (v.x * Q.gx[k] + v.y * Q.gy[k] * v.z * Q.gz[k] + Q.gw[k]);
+		r -= 2 * a * (v.x * Q.gx[k] + v.y * Q.gy[k] + v.z * Q.gz[k] + Q.gw[k]);
 	}
 #endif
 
@@ -580,28 +580,105 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 }
 
 #if ATTRIBUTES
+bool CalcGradient(float grad[4], const float p0[3], const float p1[3], const float p2[3], const float n[3], float a0, float a1, float a2)
+{
+	// solve for gd
+	// [ p0, 1 ][ g0 ] = [ a0 ]
+	// [ p1, 1 ][ g1 ] = [ a1 ]
+	// [ p2, 1 ][ g2 ] = [ a2 ]
+	// [ n,  0 ][ d  ] = [ 0  ]
+
+	float det, invDet;
+
+	// 2x2 sub-determinants required to calculate 4x4 determinant
+	float det2_01_01 = p0[0] * p1[1] - p0[1] * p1[0];
+	float det2_01_02 = p0[0] * p1[2] - p0[2] * p1[0];
+	float det2_01_03 = p0[0] - p1[0];
+	float det2_01_12 = p0[1] * p1[2] - p0[2] * p1[1];
+	float det2_01_13 = p0[1] - p1[1];
+	float det2_01_23 = p0[2] - p1[2];
+
+	// 3x3 sub-determinants required to calculate 4x4 determinant
+	float det3_201_013 = p2[0] * det2_01_13 - p2[1] * det2_01_03 + det2_01_01;
+	float det3_201_023 = p2[0] * det2_01_23 - p2[2] * det2_01_03 + det2_01_02;
+	float det3_201_123 = p2[1] * det2_01_23 - p2[2] * det2_01_13 + det2_01_12;
+
+	det = -det3_201_123 * n[0] + det3_201_023 * n[1] - det3_201_013 * n[2];
+
+	if (det == 0)
+	{
+		return false;
+	}
+
+	invDet = 1.0 / det;
+
+	// remaining 2x2 sub-determinants
+	float det2_03_01 = p0[0] * n[1] - p0[1] * n[0];
+	float det2_03_02 = p0[0] * n[2] - p0[2] * n[0];
+	float det2_03_12 = p0[1] * n[2] - p0[2] * n[1];
+	float det2_03_03 = -n[0];
+	float det2_03_13 = -n[1];
+	float det2_03_23 = -n[2];
+
+	float det2_13_01 = p1[0] * n[1] - p1[1] * n[0];
+	float det2_13_02 = p1[0] * n[2] - p1[2] * n[0];
+	float det2_13_12 = p1[1] * n[2] - p1[2] * n[1];
+	float det2_13_03 = -n[0];
+	float det2_13_13 = -n[1];
+	float det2_13_23 = -n[2];
+
+	// remaining 3x3 sub-determinants
+	float det3_203_012 = p2[0] * det2_03_12 - p2[1] * det2_03_02 + p2[2] * det2_03_01;
+	float det3_203_013 = p2[0] * det2_03_13 - p2[1] * det2_03_03 + det2_03_01;
+	float det3_203_023 = p2[0] * det2_03_23 - p2[2] * det2_03_03 + det2_03_02;
+	float det3_203_123 = p2[1] * det2_03_23 - p2[2] * det2_03_13 + det2_03_12;
+
+	float det3_213_012 = p2[0] * det2_13_12 - p2[1] * det2_13_02 + p2[2] * det2_13_01;
+	float det3_213_013 = p2[0] * det2_13_13 - p2[1] * det2_13_03 + det2_13_01;
+	float det3_213_023 = p2[0] * det2_13_23 - p2[2] * det2_13_03 + det2_13_02;
+	float det3_213_123 = p2[1] * det2_13_23 - p2[2] * det2_13_13 + det2_13_12;
+
+	float det3_301_012 = n[0] * det2_01_12 - n[1] * det2_01_02 + n[2] * det2_01_01;
+	float det3_301_013 = n[0] * det2_01_13 - n[1] * det2_01_03;
+	float det3_301_023 = n[0] * det2_01_23 - n[2] * det2_01_03;
+	float det3_301_123 = n[1] * det2_01_23 - n[2] * det2_01_13;
+
+	grad[0] = -det3_213_123 * invDet * a0 + det3_203_123 * invDet * a1 + det3_301_123 * invDet * a2;
+	grad[1] = +det3_213_023 * invDet * a0 - det3_203_023 * invDet * a1 - det3_301_023 * invDet * a2;
+	grad[2] = -det3_213_013 * invDet * a0 + det3_203_013 * invDet * a1 + det3_301_013 * invDet * a2;
+	grad[3] = +det3_213_012 * invDet * a0 - det3_203_012 * invDet * a1 - det3_301_012 * invDet * a2;
+
+	return true;
+}
+
 static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float w)
 {
 	// for each attribute we want to encode the following function into the quadric:
 	// (eval(pos) - attr)^2
 	// where eval(pos) interpolates attribute across the triangle like so:
-	// eval(pos) = a0 + dot(pos - v0, normalize(v1 - v0)) * (a1 - a0) + dot(pos - v0, normalize(v2 - v0)) * (a2 - a0)
-	// we will encode the gradients of the attribute into gx/gy/gz/gw (so that gx * pos.x + gy * pos.y + gz * pos.z + gw = eval(pos))
+	// eval(pos) = pos.x * gx + pos.y * gy + pos.z * gz + gw
+	// where gx/gy/gz/gw are gradients
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
-	normalize(p10);
-	normalize(p20);
+	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
+	normalize(normal);
 
 	for (int k = 0; k < ATTRIBUTES; ++k)
 	{
 		float a0 = p0.a[k], a1 = p1.a[k], a2 = p2.a[k];
 
 		// compute gradient of eval(pos) for x/y/z/w
-		float gx = p10.x * (a1 - a0) + p20.x * (a2 - a0);
-		float gy = p10.y * (a1 - a0) + p20.y * (a2 - a0);
-		float gz = p10.z * (a1 - a0) + p20.z * (a2 - a0);
-		float gw = a0 - (p0.x * p10.x + p0.y * p10.y + p0.z * p10.z) * (a1 - a0) - (p0.x * p20.x + p0.y * p20.y + p0.z * p20.z) * (a2 - a0);
+		// float gx = p10.x * (a1 - a0) + p20.x * (a2 - a0);
+		// float gy = p10.y * (a1 - a0) + p20.y * (a2 - a0);
+		// float gz = p10.z * (a1 - a0) + p20.z * (a2 - a0);
+		// float gw = a0 - (p0.x * p10.x + p0.y * p10.y + p0.z * p10.z) * (a1 - a0) - (p0.x * p20.x + p0.y * p20.y + p0.z * p20.z) * (a2 - a0);
+		float g[4] = {};
+		CalcGradient(g, &p0.x, &p1.x, &p2.x, &normal.x, a0, a1, a2);
+		float gx = g[0];
+		float gy = g[1];
+		float gz = g[2];
+		float gw = g[3];
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
 		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
