@@ -16,6 +16,8 @@
 
 #define ATTRIBUTES 8
 
+typedef double real;
+
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
@@ -366,10 +368,10 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 
 struct Vector3
 {
-	float x, y, z;
+	real x, y, z;
 
 #if ATTRIBUTES
-	float a[ATTRIBUTES];
+	real a[ATTRIBUTES];
 #endif
 };
 
@@ -415,16 +417,16 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 
 struct Quadric
 {
-	float a00, a11, a22;
-	float a10, a20, a21;
-	float b0, b1, b2, c;
-	float w;
+	real a00, a11, a22;
+	real a10, a20, a21;
+	real b0, b1, b2, c;
+	real w;
 
 #if ATTRIBUTES
-	float gx[ATTRIBUTES];
-	float gy[ATTRIBUTES];
-	float gz[ATTRIBUTES];
-	float gw[ATTRIBUTES];
+	real gx[ATTRIBUTES];
+	real gy[ATTRIBUTES];
+	real gz[ATTRIBUTES];
+	real gw[ATTRIBUTES];
 #endif
 };
 
@@ -440,9 +442,9 @@ struct Collapse
 	};
 };
 
-static float normalize(Vector3& v)
+static real normalize(Vector3& v)
 {
-	float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+	real length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 
 	if (length > 0)
 	{
@@ -479,11 +481,11 @@ static void quadricAdd(Quadric& Q, const Quadric& R)
 #endif
 }
 
-static float quadricError(const Quadric& Q, const Vector3& v)
+static real quadricError(const Quadric& Q, const Vector3& v)
 {
-	float rx = Q.b0;
-	float ry = Q.b1;
-	float rz = Q.b2;
+	real rx = Q.b0;
+	real ry = Q.b1;
+	real rz = Q.b2;
 
 	rx += Q.a10 * v.y;
 	ry += Q.a21 * v.z;
@@ -497,7 +499,7 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	ry += Q.a11 * v.y;
 	rz += Q.a22 * v.z;
 
-	float r = Q.c;
+	real r = Q.c;
 	r += rx * v.x;
 	r += ry * v.y;
 	r += rz * v.z;
@@ -506,24 +508,24 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	// see quadricUpdateAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
 	for (int k = 0; k < ATTRIBUTES; ++k)
 	{
-		float a = v.a[k];
+		real a = v.a[k];
 
 		r += a * a * Q.w;
 		r -= 2 * a * (v.x * Q.gx[k] + v.y * Q.gy[k] + v.z * Q.gz[k] + Q.gw[k]);
 	}
 #endif
 
-	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
+	real s = Q.w == 0.f ? 0.f : 1.f / Q.w;
 
 	return fabsf(r) * s;
 }
 
-static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
+static void quadricFromPlane(Quadric& Q, real a, real b, real c, real d, real w)
 {
-	float aw = a * w;
-	float bw = b * w;
-	float cw = c * w;
-	float dw = d * w;
+	real aw = a * w;
+	real bw = b * w;
+	real cw = c * w;
+	real dw = d * w;
 
 	Q.a00 = a * aw;
 	Q.a11 = b * bw;
@@ -545,42 +547,42 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, flo
 #endif
 }
 
-static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
+static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, real weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
 	// normal = cross(p1 - p0, p2 - p0)
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
-	float area = normalize(normal);
+	real area = normalize(normal);
 
-	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+	real distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
 	// we use sqrtf(area) so that the error is scaled linearly; this tends to improve silhouettes
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, sqrtf(area) * weight);
 }
 
-static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
+static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, real weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
-	float length = normalize(p10);
+	real length = normalize(p10);
 
 	// p20p = length of projection of p2-p0 onto normalize(p1 - p0)
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
-	float p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
+	real p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
 
 	// normal = altitude of triangle from point p2 onto edge p1-p0
 	Vector3 normal = {p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p};
 	normalize(normal);
 
-	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+	real distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
 	// note: the weight is scaled linearly with edge length; this has to match the triangle weight
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
 }
 
 #if ATTRIBUTES
-bool CalcGradient(float grad[4], const float p0[3], const float p1[3], const float p2[3], const float n[3], float a0, float a1, float a2)
+bool CalcGradient(real grad[4], const real p0[3], const real p1[3], const real p2[3], const real n[3], real a0, real a1, real a2)
 {
 	// solve for gd
 	// [ p0, 1 ][ g0 ] = [ a0 ]
@@ -588,20 +590,20 @@ bool CalcGradient(float grad[4], const float p0[3], const float p1[3], const flo
 	// [ p2, 1 ][ g2 ] = [ a2 ]
 	// [ n,  0 ][ d  ] = [ 0  ]
 
-	float det, invDet;
+	real det, invDet;
 
 	// 2x2 sub-determinants required to calculate 4x4 determinant
-	float det2_01_01 = p0[0] * p1[1] - p0[1] * p1[0];
-	float det2_01_02 = p0[0] * p1[2] - p0[2] * p1[0];
-	float det2_01_03 = p0[0] - p1[0];
-	float det2_01_12 = p0[1] * p1[2] - p0[2] * p1[1];
-	float det2_01_13 = p0[1] - p1[1];
-	float det2_01_23 = p0[2] - p1[2];
+	real det2_01_01 = p0[0] * p1[1] - p0[1] * p1[0];
+	real det2_01_02 = p0[0] * p1[2] - p0[2] * p1[0];
+	real det2_01_03 = p0[0] - p1[0];
+	real det2_01_12 = p0[1] * p1[2] - p0[2] * p1[1];
+	real det2_01_13 = p0[1] - p1[1];
+	real det2_01_23 = p0[2] - p1[2];
 
 	// 3x3 sub-determinants required to calculate 4x4 determinant
-	float det3_201_013 = p2[0] * det2_01_13 - p2[1] * det2_01_03 + det2_01_01;
-	float det3_201_023 = p2[0] * det2_01_23 - p2[2] * det2_01_03 + det2_01_02;
-	float det3_201_123 = p2[1] * det2_01_23 - p2[2] * det2_01_13 + det2_01_12;
+	real det3_201_013 = p2[0] * det2_01_13 - p2[1] * det2_01_03 + det2_01_01;
+	real det3_201_023 = p2[0] * det2_01_23 - p2[2] * det2_01_03 + det2_01_02;
+	real det3_201_123 = p2[1] * det2_01_23 - p2[2] * det2_01_13 + det2_01_12;
 
 	det = -det3_201_123 * n[0] + det3_201_023 * n[1] - det3_201_013 * n[2];
 
@@ -613,35 +615,35 @@ bool CalcGradient(float grad[4], const float p0[3], const float p1[3], const flo
 	invDet = 1.0 / det;
 
 	// remaining 2x2 sub-determinants
-	float det2_03_01 = p0[0] * n[1] - p0[1] * n[0];
-	float det2_03_02 = p0[0] * n[2] - p0[2] * n[0];
-	float det2_03_12 = p0[1] * n[2] - p0[2] * n[1];
-	float det2_03_03 = -n[0];
-	float det2_03_13 = -n[1];
-	float det2_03_23 = -n[2];
+	real det2_03_01 = p0[0] * n[1] - p0[1] * n[0];
+	real det2_03_02 = p0[0] * n[2] - p0[2] * n[0];
+	real det2_03_12 = p0[1] * n[2] - p0[2] * n[1];
+	real det2_03_03 = -n[0];
+	real det2_03_13 = -n[1];
+	real det2_03_23 = -n[2];
 
-	float det2_13_01 = p1[0] * n[1] - p1[1] * n[0];
-	float det2_13_02 = p1[0] * n[2] - p1[2] * n[0];
-	float det2_13_12 = p1[1] * n[2] - p1[2] * n[1];
-	float det2_13_03 = -n[0];
-	float det2_13_13 = -n[1];
-	float det2_13_23 = -n[2];
+	real det2_13_01 = p1[0] * n[1] - p1[1] * n[0];
+	real det2_13_02 = p1[0] * n[2] - p1[2] * n[0];
+	real det2_13_12 = p1[1] * n[2] - p1[2] * n[1];
+	real det2_13_03 = -n[0];
+	real det2_13_13 = -n[1];
+	real det2_13_23 = -n[2];
 
 	// remaining 3x3 sub-determinants
-	float det3_203_012 = p2[0] * det2_03_12 - p2[1] * det2_03_02 + p2[2] * det2_03_01;
-	float det3_203_013 = p2[0] * det2_03_13 - p2[1] * det2_03_03 + det2_03_01;
-	float det3_203_023 = p2[0] * det2_03_23 - p2[2] * det2_03_03 + det2_03_02;
-	float det3_203_123 = p2[1] * det2_03_23 - p2[2] * det2_03_13 + det2_03_12;
+	real det3_203_012 = p2[0] * det2_03_12 - p2[1] * det2_03_02 + p2[2] * det2_03_01;
+	real det3_203_013 = p2[0] * det2_03_13 - p2[1] * det2_03_03 + det2_03_01;
+	real det3_203_023 = p2[0] * det2_03_23 - p2[2] * det2_03_03 + det2_03_02;
+	real det3_203_123 = p2[1] * det2_03_23 - p2[2] * det2_03_13 + det2_03_12;
 
-	float det3_213_012 = p2[0] * det2_13_12 - p2[1] * det2_13_02 + p2[2] * det2_13_01;
-	float det3_213_013 = p2[0] * det2_13_13 - p2[1] * det2_13_03 + det2_13_01;
-	float det3_213_023 = p2[0] * det2_13_23 - p2[2] * det2_13_03 + det2_13_02;
-	float det3_213_123 = p2[1] * det2_13_23 - p2[2] * det2_13_13 + det2_13_12;
+	real det3_213_012 = p2[0] * det2_13_12 - p2[1] * det2_13_02 + p2[2] * det2_13_01;
+	real det3_213_013 = p2[0] * det2_13_13 - p2[1] * det2_13_03 + det2_13_01;
+	real det3_213_023 = p2[0] * det2_13_23 - p2[2] * det2_13_03 + det2_13_02;
+	real det3_213_123 = p2[1] * det2_13_23 - p2[2] * det2_13_13 + det2_13_12;
 
-	float det3_301_012 = n[0] * det2_01_12 - n[1] * det2_01_02 + n[2] * det2_01_01;
-	float det3_301_013 = n[0] * det2_01_13 - n[1] * det2_01_03;
-	float det3_301_023 = n[0] * det2_01_23 - n[2] * det2_01_03;
-	float det3_301_123 = n[1] * det2_01_23 - n[2] * det2_01_13;
+	real det3_301_012 = n[0] * det2_01_12 - n[1] * det2_01_02 + n[2] * det2_01_01;
+	real det3_301_013 = n[0] * det2_01_13 - n[1] * det2_01_03;
+	real det3_301_023 = n[0] * det2_01_23 - n[2] * det2_01_03;
+	real det3_301_123 = n[1] * det2_01_23 - n[2] * det2_01_13;
 
 	grad[0] = -det3_213_123 * invDet * a0 + det3_203_123 * invDet * a1 + det3_301_123 * invDet * a2;
 	grad[1] = +det3_213_023 * invDet * a0 - det3_203_023 * invDet * a1 - det3_301_023 * invDet * a2;
@@ -651,7 +653,7 @@ bool CalcGradient(float grad[4], const float p0[3], const float p1[3], const flo
 	return true;
 }
 
-static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float w)
+static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, real w)
 {
 	// for each attribute we want to encode the following function into the quadric:
 	// (eval(pos) - attr)^2
@@ -666,19 +668,20 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 
 	for (int k = 0; k < ATTRIBUTES; ++k)
 	{
-		float a0 = p0.a[k], a1 = p1.a[k], a2 = p2.a[k];
+		real a0 = p0.a[k], a1 = p1.a[k], a2 = p2.a[k];
 
 		// compute gradient of eval(pos) for x/y/z/w
-		// float gx = p10.x * (a1 - a0) + p20.x * (a2 - a0);
-		// float gy = p10.y * (a1 - a0) + p20.y * (a2 - a0);
-		// float gz = p10.z * (a1 - a0) + p20.z * (a2 - a0);
-		// float gw = a0 - (p0.x * p10.x + p0.y * p10.y + p0.z * p10.z) * (a1 - a0) - (p0.x * p20.x + p0.y * p20.y + p0.z * p20.z) * (a2 - a0);
-		float g[4] = {};
+		// real gx = p10.x * (a1 - a0) + p20.x * (a2 - a0);
+		// real gy = p10.y * (a1 - a0) + p20.y * (a2 - a0);
+		// real gz = p10.z * (a1 - a0) + p20.z * (a2 - a0);
+		// real gw = a0 - (p0.x * p10.x + p0.y * p10.y + p0.z * p10.z) * (a1 - a0) - (p0.x * p20.x + p0.y * p20.y + p0.z * p20.z) * (a2 - a0);
+		real g[4] = {};
+		g[3] = (a0 + a1 + a2) / 3; // for singularities (when CalcGradient returns false)
 		CalcGradient(g, &p0.x, &p1.x, &p2.x, &normal.x, a0, a1, a2);
-		float gx = g[0];
-		float gy = g[1];
-		float gz = g[2];
-		float gw = g[3];
+		real gx = g[0];
+		real gy = g[1];
+		real gz = g[2];
+		real gw = g[3];
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
 		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
@@ -701,6 +704,14 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 		Q.gy[k] = w * gy;
 		Q.gz[k] = w * gz;
 		Q.gw[k] = w * gw;
+
+		if (0)
+		printf("attr%d: %e %e %e\n",
+			k,
+			(gx * p0.x + gy * p0.y + gz * p0.z + gw - a0),
+			(gx * p1.x + gy * p1.y + gz * p1.z + gw - a1),
+			(gx * p2.x + gy * p2.y + gz * p2.z + gw - a2)
+			);
 	}
 }
 #endif
@@ -718,6 +729,12 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 
 #if ATTRIBUTES
 		quadricUpdateAttributes(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], Q.w);
+
+		if (0)
+		printf("%e %e %e\n",
+			quadricError(Q, vertex_positions[i0]),
+			quadricError(Q, vertex_positions[i1]),
+			quadricError(Q, vertex_positions[i2]));
 #endif
 
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
@@ -1312,7 +1329,7 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 #if ATTRIBUTES
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		memset(vertex_positions[i].a, 0, sizeof(float) * ATTRIBUTES);
+		memset(vertex_positions[i].a, 0, sizeof(vertex_positions[i].a));
 
 		for (size_t k = 0; k < attribute_count; ++k)
 		{
