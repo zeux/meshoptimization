@@ -349,11 +349,12 @@ Mesh optimize(const Mesh& mesh, int lod)
 	meshopt_simplifyDebugLoop = &result.loop[0];
 
 	// result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+	float colorw = 1;
 	float attribute_weights[8] =
 	{
 		0, 0, // uv
 		0, 0, 0, // normal
-		0.1, 0.1, 0.1, // color
+		colorw, colorw, colorw, // color
 	};
 	result.indices.resize(meshopt_simplifyWithAttributes(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, attribute_weights, 8));
 
