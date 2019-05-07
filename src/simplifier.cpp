@@ -515,7 +515,8 @@ static real quadricError(const Quadric& Q, const Vector3& v)
 	}
 #endif
 
-	real s = Q.w == 0.f ? 0.f : 1.f / Q.w;
+	// TODO: weight normalization is breaking attribute error somehow
+	real s = 1;// Q.w == 0.f ? 0.f : 1.f / Q.w;
 
 	return fabsf(r) * s;
 }
