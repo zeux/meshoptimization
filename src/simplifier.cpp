@@ -706,13 +706,14 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 		Q.gz[k] = w * gz;
 		Q.gw[k] = w * gw;
 
-		if (0)
+#if TRACE > 1
 		printf("attr%d: %e %e %e\n",
 			k,
 			(gx * p0.x + gy * p0.y + gz * p0.z + gw - a0),
 			(gx * p1.x + gy * p1.y + gz * p1.z + gw - a1),
 			(gx * p2.x + gy * p2.y + gz * p2.z + gw - a2)
 			);
+#endif
 	}
 }
 #endif
@@ -731,11 +732,12 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 #if ATTRIBUTES
 		quadricUpdateAttributes(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], Q.w);
 
-		if (0)
+#if TRACE > 1
 		printf("%e %e %e\n",
 			quadricError(Q, vertex_positions[i0]),
 			quadricError(Q, vertex_positions[i1]),
 			quadricError(Q, vertex_positions[i2]));
+#endif
 #endif
 
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
