@@ -606,15 +606,24 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 	float denom = d00 * d11 - d01 * d01;
 	float denomr = denom == 0 ? 0.f : 1.f / denom;
 
+	// precompute gradient factors
+	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out common factors that are shared between attributes
+	real gx1 = (d11 * v0.x - d01 * v1.x) * denomr;
+	real gx2 = (d00 * v1.x - d01 * v0.x) * denomr;
+	real gy1 = (d11 * v0.y - d01 * v1.y) * denomr;
+	real gy2 = (d00 * v1.y - d01 * v0.y) * denomr;
+	real gz1 = (d11 * v0.z - d01 * v1.z) * denomr;
+	real gz2 = (d00 * v1.z - d01 * v0.z) * denomr;
+
 	for (int k = 0; k < ATTRIBUTES; ++k)
 	{
 		real a0 = p0.a[k], a1 = p1.a[k], a2 = p2.a[k];
 
 		// compute gradient of eval(pos) for x/y/z/w
 		// the formulas below are obtained by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w
-		real gx = ((d11 * v0.x - d01 * v1.x) * (a1 - a0) + (d00 * v1.x - d01 * v0.x) * (a2 - a0)) * denomr;
-		real gy = ((d11 * v0.y - d01 * v1.y) * (a1 - a0) + (d00 * v1.y - d01 * v0.y) * (a2 - a0)) * denomr;
-		real gz = ((d11 * v0.z - d01 * v1.z) * (a1 - a0) + (d00 * v1.z - d01 * v0.z) * (a2 - a0)) * denomr;
+		real gx = gx1 * (a1 - a0) + gx2 * (a2 - a0);
+		real gy = gy1 * (a1 - a0) + gy2 * (a2 - a0);
+		real gz = gz1 * (a1 - a0) + gz2 * (a2 - a0);
 		real gw = a0 - p0.x * gx - p0.y * gy - p0.z * gz;
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
