@@ -340,7 +340,7 @@ Mesh optimize(const Mesh& mesh, int lod)
 {
 	float threshold = powf(0.5f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
-	float target_error = 100;
+	float target_error = 100;// 1e-1f;
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
@@ -349,14 +349,17 @@ Mesh optimize(const Mesh& mesh, int lod)
 	meshopt_simplifyDebugLoop = &result.loop[0];
 
 	// result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
-	float colorw = 1;
+	float normalw = 0.05f;
+	float colorw = 0.05f;
 	float attribute_weights[8] =
 	{
 		0, 0, // uv
-		0, 0, 0, // normal
+		normalw, normalw, normalw, // normal
 		colorw, colorw, colorw, // color
 	};
+	// result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 	result.indices.resize(meshopt_simplifyWithAttributes(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, attribute_weights, 8));
+	// result.indices.resize(meshopt_simplifyWithAttributesX(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, &mesh.vertices[0].r, &mesh.vertices[0].nx, mesh.vertices.size(), sizeof(Vertex), sizeof(Vertex), sizeof(Vertex), target_index_count, target_error, 1));
 
 	return result;
 }

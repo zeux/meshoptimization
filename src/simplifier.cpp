@@ -583,77 +583,6 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 }
 
 #if ATTRIBUTES
-bool CalcGradient(real grad[4], const real p0[3], const real p1[3], const real p2[3], const real n[3], real a0, real a1, real a2)
-{
-	// solve for gd
-	// [ p0, 1 ][ g0 ] = [ a0 ]
-	// [ p1, 1 ][ g1 ] = [ a1 ]
-	// [ p2, 1 ][ g2 ] = [ a2 ]
-	// [ n,  0 ][ d  ] = [ 0  ]
-
-	real det, invDet;
-
-	// 2x2 sub-determinants required to calculate 4x4 determinant
-	real det2_01_01 = p0[0] * p1[1] - p0[1] * p1[0];
-	real det2_01_02 = p0[0] * p1[2] - p0[2] * p1[0];
-	real det2_01_03 = p0[0] - p1[0];
-	real det2_01_12 = p0[1] * p1[2] - p0[2] * p1[1];
-	real det2_01_13 = p0[1] - p1[1];
-	real det2_01_23 = p0[2] - p1[2];
-
-	// 3x3 sub-determinants required to calculate 4x4 determinant
-	real det3_201_013 = p2[0] * det2_01_13 - p2[1] * det2_01_03 + det2_01_01;
-	real det3_201_023 = p2[0] * det2_01_23 - p2[2] * det2_01_03 + det2_01_02;
-	real det3_201_123 = p2[1] * det2_01_23 - p2[2] * det2_01_13 + det2_01_12;
-
-	det = -det3_201_123 * n[0] + det3_201_023 * n[1] - det3_201_013 * n[2];
-
-	if (det == 0)
-	{
-		return false;
-	}
-
-	invDet = 1.0 / det;
-
-	// remaining 2x2 sub-determinants
-	real det2_03_01 = p0[0] * n[1] - p0[1] * n[0];
-	real det2_03_02 = p0[0] * n[2] - p0[2] * n[0];
-	real det2_03_12 = p0[1] * n[2] - p0[2] * n[1];
-	real det2_03_03 = -n[0];
-	real det2_03_13 = -n[1];
-	real det2_03_23 = -n[2];
-
-	real det2_13_01 = p1[0] * n[1] - p1[1] * n[0];
-	real det2_13_02 = p1[0] * n[2] - p1[2] * n[0];
-	real det2_13_12 = p1[1] * n[2] - p1[2] * n[1];
-	real det2_13_03 = -n[0];
-	real det2_13_13 = -n[1];
-	real det2_13_23 = -n[2];
-
-	// remaining 3x3 sub-determinants
-	real det3_203_012 = p2[0] * det2_03_12 - p2[1] * det2_03_02 + p2[2] * det2_03_01;
-	real det3_203_013 = p2[0] * det2_03_13 - p2[1] * det2_03_03 + det2_03_01;
-	real det3_203_023 = p2[0] * det2_03_23 - p2[2] * det2_03_03 + det2_03_02;
-	real det3_203_123 = p2[1] * det2_03_23 - p2[2] * det2_03_13 + det2_03_12;
-
-	real det3_213_012 = p2[0] * det2_13_12 - p2[1] * det2_13_02 + p2[2] * det2_13_01;
-	real det3_213_013 = p2[0] * det2_13_13 - p2[1] * det2_13_03 + det2_13_01;
-	real det3_213_023 = p2[0] * det2_13_23 - p2[2] * det2_13_03 + det2_13_02;
-	real det3_213_123 = p2[1] * det2_13_23 - p2[2] * det2_13_13 + det2_13_12;
-
-	real det3_301_012 = n[0] * det2_01_12 - n[1] * det2_01_02 + n[2] * det2_01_01;
-	real det3_301_013 = n[0] * det2_01_13 - n[1] * det2_01_03;
-	real det3_301_023 = n[0] * det2_01_23 - n[2] * det2_01_03;
-	real det3_301_123 = n[1] * det2_01_23 - n[2] * det2_01_13;
-
-	grad[0] = -det3_213_123 * invDet * a0 + det3_203_123 * invDet * a1 + det3_301_123 * invDet * a2;
-	grad[1] = +det3_213_023 * invDet * a0 - det3_203_023 * invDet * a1 - det3_301_023 * invDet * a2;
-	grad[2] = -det3_213_013 * invDet * a0 + det3_203_013 * invDet * a1 + det3_301_013 * invDet * a2;
-	grad[3] = +det3_213_012 * invDet * a0 - det3_203_012 * invDet * a1 - det3_301_012 * invDet * a2;
-
-	return true;
-}
-
 static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, real w)
 {
 	// for each attribute we want to encode the following function into the quadric:
@@ -664,25 +593,29 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
-	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
-	normalize(normal);
+	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
+	// v = (d11 * d20 - d01 * d21) / denom
+	// w = (d00 * d21 - d01 * d20) / denom
+	// u = 1 - v - w
+	// here v0, v1 are triangle edge vectors, v2 is a vector from point to triangle corner, and dij = dot(vi, vj)
+	const Vector3& v0 = p10;
+	const Vector3& v1 = p20;
+	float d00 = v0.x * v0.x + v0.y * v0.y + v0.z * v0.z;
+	float d01 = v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+	float d11 = v1.x * v1.x + v1.y * v1.y + v1.z * v1.z;
+	float denom = d00 * d11 - d01 * d01;
+	float denomr = denom == 0 ? 0.f : 1.f / denom;
 
 	for (int k = 0; k < ATTRIBUTES; ++k)
 	{
 		real a0 = p0.a[k], a1 = p1.a[k], a2 = p2.a[k];
 
 		// compute gradient of eval(pos) for x/y/z/w
-		// real gx = p10.x * (a1 - a0) + p20.x * (a2 - a0);
-		// real gy = p10.y * (a1 - a0) + p20.y * (a2 - a0);
-		// real gz = p10.z * (a1 - a0) + p20.z * (a2 - a0);
-		// real gw = a0 - (p0.x * p10.x + p0.y * p10.y + p0.z * p10.z) * (a1 - a0) - (p0.x * p20.x + p0.y * p20.y + p0.z * p20.z) * (a2 - a0);
-		real g[4] = {};
-		g[3] = (a0 + a1 + a2) / 3; // for singularities (when CalcGradient returns false)
-		CalcGradient(g, &p0.x, &p1.x, &p2.x, &normal.x, a0, a1, a2);
-		real gx = g[0];
-		real gy = g[1];
-		real gz = g[2];
-		real gw = g[3];
+		// the formulas below are obtained by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w
+		real gx = ((d11 * v0.x - d01 * v1.x) * (a1 - a0) + (d00 * v1.x - d01 * v0.x) * (a2 - a0)) * denomr;
+		real gy = ((d11 * v0.y - d01 * v1.y) * (a1 - a0) + (d00 * v1.y - d01 * v0.y) * (a2 - a0)) * denomr;
+		real gz = ((d11 * v0.z - d01 * v1.z) * (a1 - a0) + (d00 * v1.z - d01 * v0.z) * (a2 - a0)) * denomr;
+		real gw = a0 - p0.x * gx - p0.y * gy - p0.z * gz;
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
 		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
@@ -706,7 +639,7 @@ static void quadricUpdateAttributes(Quadric& Q, const Vector3& p0, const Vector3
 		Q.gz[k] = w * gz;
 		Q.gw[k] = w * gw;
 
-#if TRACE > 1
+#if TRACE > 2
 		printf("attr%d: %e %e %e\n",
 			k,
 			(gx * p0.x + gy * p0.y + gz * p0.z + gw - a0),
@@ -732,7 +665,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 #if ATTRIBUTES
 		quadricUpdateAttributes(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], Q.w);
 
-#if TRACE > 1
+#if TRACE > 2
 		printf("%e %e %e\n",
 			quadricError(Q, vertex_positions[i0]),
 			quadricError(Q, vertex_positions[i1]),
