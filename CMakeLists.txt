@@ -26,6 +26,7 @@ set(SOURCES
     src/vcacheanalyzer.cpp
     src/vcacheoptimizer.cpp
     src/vertexcodec.cpp
+    src/vertexpacker.cpp
     src/vfetchanalyzer.cpp
     src/vfetchoptimizer.cpp
 )

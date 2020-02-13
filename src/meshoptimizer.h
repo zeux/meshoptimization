@@ -431,6 +431,11 @@ inline unsigned short meshopt_quantizeHalf(float v);
 inline float meshopt_quantizeFloat(float v, int N);
 #endif
 
+void meshopt_optimizeUnormQuantizationError(const float* vertex_ptr, size_t vertex_stride, size_t vertex_count, int bitcount, bool uniform_scale, int iteration_count, /*out*/ float scale[3], /*out*/ float offset[3]);
+void meshopt_evaluateUnormQuantizationError(const float* vertex_ptr, size_t vertex_stride, size_t vertex_count, int bitcount, float scale[3], float offset[3], /*out*/ float errors[2]);
+void meshopt_evaluateHalfQuantizationError(const float* vertex_ptr, size_t vertex_stride, size_t vertex_count, float scale[3], float offset[3], /*out*/ float errors[2]);
+void meshopt_computeMeshBounds(const float* vertex_ptr, size_t vertex_stride, size_t vertex_count, float minv[3], float maxv[3]);
+
 /**
  * C++ template interface
  *

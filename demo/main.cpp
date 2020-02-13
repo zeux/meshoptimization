@@ -1024,12 +1024,92 @@ void process(const char* path)
 		processDeinterleaved(path);
 }
 
+void vertexPackingTest(const Mesh* mesh)
+{
+	const float* vertex_ptr = &mesh->vertices[0].px;
+	const size_t vertex_stride = sizeof(Vertex);
+	const size_t vertex_count = mesh->vertices.size();
+
+	float scale[3] = {1, 1, 1};
+	float offset[3] = {0, 0, 0};
+	float errors[2];
+
+	// Compare the error of packing the mesh vertex positions using:
+	printf("Vertex Packing Tests:\n");
+
+	// - Half float naive.
+	meshopt_evaluateHalfQuantizationError(vertex_ptr, vertex_stride, vertex_count, scale, offset, errors);
+	printf("Half Float naive:   %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - Half float centered around the origin.
+	float minv[3], maxv[3];
+	meshopt_computeMeshBounds(vertex_ptr, vertex_stride, vertex_count, minv, maxv);
+
+	for (int j = 0; j < 3; ++j)
+	{
+		offset[j] = (maxv[j] - minv[j]) * 0.5f;
+	}
+
+	meshopt_evaluateHalfQuantizationError(vertex_ptr, vertex_stride, vertex_count, scale, offset, errors);
+	printf("Half Float center:  %.8f, %.8f\n", errors[0], errors[1]);
+
+	// @@ I'd like to try other optimization strategies for half floats.
+
+	// Init scale offset based on bounding box.
+	for (int j = 0; j < 3; ++j)
+	{
+		scale[j] = (maxv[j] - minv[j]);
+		scale[j] = scale[j] < 0.01f ? 0.01f : scale[j]; // Avoid division by 0.
+		offset[j] = minv[j];
+	}
+
+	bool uniform_scale = true;
+
+	if (uniform_scale)
+	{
+		float s = scale[0];
+		if (s < scale[1]) s = scale[1];
+        if (s < scale[2]) s = scale[2];
+		scale[0] = scale[1] = scale[2] = s;
+	}
+
+    int iteration_count = 10;
+
+	// - UINT16 default box.
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 16, scale, offset, errors);
+	printf("UINT16 naive:       %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - UINT10 default box.
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 10, scale, offset, errors);
+	printf("UINT10 naive:       %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - UINT8 default box.
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 8, scale, offset, errors);
+	printf("UINT8 naive:        %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - UINT16 optimized.
+	meshopt_optimizeUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 16, 1, uniform_scale, scale, offset);
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 16, scale, offset, errors);
+	printf("UINT16 optimized:   %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - UINT10 optimized.
+	meshopt_optimizeUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 10, iteration_count, uniform_scale, scale, offset);
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 10, scale, offset, errors);
+	printf("UINT10 optimized:   %.8f, %.8f\n", errors[0], errors[1]);
+
+	// - UINT8 optimized.
+	meshopt_optimizeUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 8, iteration_count, uniform_scale, scale, offset);
+	meshopt_evaluateUnormQuantizationError(vertex_ptr, vertex_stride, vertex_count, 8, scale, offset, errors);
+	printf("UINT8 optimized:    %.8f, %.8f\n", errors[0], errors[1]);
+}
+
 void processDev(const char* path)
 {
 	Mesh mesh;
 	if (!loadMesh(mesh, path))
 		return;
 
+#if 0
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCacheStrip(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
@@ -1037,6 +1117,11 @@ void processDev(const char* path)
 	encodeIndex(copy, ' ');
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
+
+	encodeVertex<PackedVertexOct>(copy, "O");
+#else
+	vertexPackingTest(&mesh);
+#endif
 }
 
 int main(int argc, char** argv)
