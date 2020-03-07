@@ -147,6 +147,10 @@ struct NodeInfo
 
 	int remap;
 	std::vector<size_t> meshes;
+
+	float radius_self;
+	float radius_tree;
+	float radius_scale;
 };
 
 struct MaterialInfo
@@ -218,6 +222,7 @@ void transformMesh(Mesh& mesh, const cgltf_node* node);
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
+bool getBoneRadius(std::vector<float>& result, const Mesh& mesh);
 
 bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
@@ -231,6 +236,7 @@ std::string basisToKtx(const std::string& basis, bool srgb);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);
+void analyzeBoneRadius(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes);
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);

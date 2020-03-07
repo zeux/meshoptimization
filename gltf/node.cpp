@@ -1,6 +1,10 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <math.h>
+
+#include <algorithm>
+
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations)
 {
 	for (size_t i = 0; i < animations.size(); ++i)
@@ -100,6 +104,80 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 				nodes[i].keep = true;
 			}
 		}
+	}
+}
+
+static float det3x3(const float* transform)
+{
+	float a0 = transform[5] * transform[10] - transform[6] * transform[9];
+	float a1 = transform[4] * transform[10] - transform[6] * transform[8];
+	float a2 = transform[4] * transform[9] - transform[5] * transform[8];
+
+	return transform[0] * a0 - transform[1] * a1 + transform[2] * a2;
+}
+
+static void analyzeBone(cgltf_data* data, cgltf_node* node, std::vector<NodeInfo>& nodes, float scale)
+{
+	NodeInfo& ni = nodes[node - data->nodes];
+
+	ni.radius_scale = scale;
+
+	float transform[16];
+	cgltf_node_transform_local(node, transform);
+
+	float scale_next = scale * powf(fabsf(det3x3(transform)), 1.f / 3.f);
+
+	ni.radius_tree = ni.radius_self;
+
+	for (size_t i = 0; i < node->children_count; ++i)
+	{
+		cgltf_node* child = node->children[i];
+		NodeInfo& cni = nodes[child - data->nodes];
+
+		analyzeBone(data, child, nodes, scale_next);
+
+		float child_transform[16];
+		cgltf_node_transform_local(child, child_transform);
+
+		float child_scale = powf(fabsf(det3x3(child_transform)), 1.f / 3.f);
+		float child_radius = sqrtf(child_transform[12] * child_transform[12] + child_transform[13] * child_transform[13] + child_transform[14] * child_transform[14]);
+
+		ni.radius_tree = std::max(ni.radius_tree, child_scale * cni.radius_tree + child_radius);
+	}
+}
+
+void analyzeBoneRadius(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
+{
+	// first, go through the meshes and compute bone space radius based on influences
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		if (!mesh.skin)
+			continue;
+
+		std::vector<float> r;
+		if (!getBoneRadius(r, mesh))
+			continue;
+
+		for (size_t j = 0; j < mesh.skin->joints_count; ++j)
+		{
+			cgltf_node* joint = mesh.skin->joints[j];
+			NodeInfo& ni = nodes[joint - data->nodes];
+
+			ni.radius_self = std::max(ni.radius_self, r[j]);
+		}
+	}
+
+	// now, compute radius_scale and radius_tree hierarchically, starting from roots
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		cgltf_node* n = data->nodes + i;
+
+		if (n->parent)
+			continue;
+
+		analyzeBone(data, n, nodes, 1.f);
 	}
 }
 

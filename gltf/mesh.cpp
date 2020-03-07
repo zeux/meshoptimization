@@ -370,13 +370,18 @@ static void filterTriangles(Mesh& mesh)
 	mesh.indices.resize(write);
 }
 
-static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
+static const Stream* getStream(const Mesh& mesh, cgltf_attribute_type type, int index = 0)
 {
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
-		if (mesh.streams[i].type == type && mesh.streams[i].index == index)
+		if (mesh.streams[i].type == type && mesh.streams[i].index == index && mesh.streams[i].target == 0)
 			return &mesh.streams[i];
 
 	return 0;
+}
+
+static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
+{
+	return const_cast<Stream*>(getStream(static_cast<const Mesh&>(mesh), type, index));
 }
 
 static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
@@ -618,4 +623,59 @@ void processMesh(Mesh& mesh, const Settings& settings)
 	default:
 		assert(!"Unknown primitive type");
 	}
+}
+
+bool getBoneRadius(std::vector<float>& result, const Mesh& mesh)
+{
+	if (!mesh.skin)
+		return false;
+
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	const Stream* joints = getStream(mesh, cgltf_attribute_type_joints);
+	const Stream* weights = getStream(mesh, cgltf_attribute_type_weights);
+
+	if (!joints || !weights)
+		return false;
+
+	assert(joints->data.size() == positions->data.size() && weights->data.size() == positions->data.size());
+
+	result.resize(mesh.skin->joints_count);
+
+	std::vector<float> inverse_bind_matrices(mesh.skin->joints_count * 16);
+
+	for (size_t j = 0; j < mesh.skin->joints_count; ++j)
+	{
+		float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+
+		if (mesh.skin->inverse_bind_matrices)
+		{
+			cgltf_accessor_read_float(mesh.skin->inverse_bind_matrices, j, transform, 16);
+		}
+
+		memcpy(&inverse_bind_matrices[j * 16], transform, sizeof(float) * 16);
+	}
+
+	for (size_t j = 0; j < joints->data.size(); ++j)
+	{
+		const Attr& vj = joints->data[j];
+		const Attr& vw = weights->data[j];
+
+		for (int k = 0; k < 4; ++k)
+		{
+			if (vw.f[k] == 0.f)
+				continue;
+
+			int bone = int(vj.f[k]);
+			assert(size_t(bone) < result.size());
+
+			Attr vp = positions->data[j];
+			transformPosition(vp.f, &inverse_bind_matrices[bone * 16]);
+
+			float vr = sqrtf(vp.f[0] * vp.f[0] + vp.f[1] * vp.f[1] + vp.f[2] * vp.f[2]);
+
+			result[bone] = std::max(result[bone], vr);
+		}
+	}
+
+	return true;
 }
