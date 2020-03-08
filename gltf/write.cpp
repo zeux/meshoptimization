@@ -1000,8 +1000,10 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		bool tc = track.data.size() == track.components;
 
+		int bits = (track.path == cgltf_animation_path_type_rotation) ? nodes[track.node - data->nodes].bits : 0;
+
 		std::string scratch;
-		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
+		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings, bits);
 
 		size_t view = getBufferView(views, BufferView::Kind_Keyframe, format.filter, track.path, format.stride, settings.compress && track.path != cgltf_animation_path_type_weights);
 		size_t offset = views[view].data.size();

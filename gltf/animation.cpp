@@ -379,12 +379,12 @@ static void decodeQuat(float r[4], const int16_t v[4])
 	r[order[qc][3]] = short(wf) / 32767.f;
 }
 
-static void roundtripRotation(float r[4], const float f[4], const Settings& settings)
+static void roundtripRotation(float r[4], const float f[4], const Settings& settings, const NodeInfo& ni)
 {
 	if (settings.compressmore)
 	{
 		int16_t v[4];
-		encodeQuat(v, f, settings.rot_bits);
+		encodeQuat(v, f, ni.bits);
 		decodeQuat(r, v);
 	}
 	else
@@ -503,7 +503,7 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 				break;
 
 			case cgltf_animation_path_type_rotation:
-				roundtripRotation(t.node->rotation, a.f, settings);
+				roundtripRotation(t.node->rotation, a.f, settings, nodes[t.node - data->nodes]);
 				break;
 
 			case cgltf_animation_path_type_scale:
@@ -538,13 +538,13 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 			if (t.path == cgltf_animation_path_type_rotation)
 			{
 				Attr r;
-				roundtripRotation(r.f, a.f, settings);
+				roundtripRotation(r.f, a.f, settings, nodes[t.node - data->nodes]);
 
 				size_t ni = t.node - data->nodes;
 
 				float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
 
-				if (1)
+				if (0)
 				{
 					// d = cos(angle / 2)
 					float d = fabsf(a.f[0] * r.f[0] + a.f[1] * r.f[1] + a.f[2] * r.f[2] + a.f[3] * r.f[3]);
@@ -561,14 +561,16 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 					q2m(m1, a.f);
 					q2m(m2, r.f);
 
-					int c = 0;
-					float ex = m1[0 + c] * R - m2[0 + c] * R;
-					float ey = m1[4 + c] * R - m2[4 + c] * R;
-					float ez = m1[8 + c] * R - m2[8 + c] * R;
+					for (int c = 0; c < 3; ++c)
+					{
+						float ex = m1[0 + c] * R - m2[0 + c] * R;
+						float ey = m1[4 + c] * R - m2[4 + c] * R;
+						float ez = m1[8 + c] * R - m2[8 + c] * R;
 
-					float e = sqrtf(ex * ex + ey * ey + ez * ez);
+						float e = sqrtf(ex * ex + ey * ey + ez * ez);
 
-					errorest[ni] = std::max(errorest[ni], e);
+						errorest[ni] = std::max(errorest[ni], e);
+					}
 				}
 			}
 		}

@@ -597,7 +597,7 @@ static void encodeQuat(int16_t v[4], const Attr& a, int bits)
 	v[3] = int16_t((meshopt_quantizeSnorm(1.f, bits) & ~0xff) | qc);
 }
 
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, int optbits)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
@@ -611,7 +611,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 
 			if (filter == StreamFormat::Filter_Quat)
 			{
-				encodeQuat(v, a, settings.rot_bits);
+				encodeQuat(v, a, optbits);
 			}
 			else
 			{

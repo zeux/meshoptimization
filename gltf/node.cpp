@@ -170,6 +170,8 @@ void analyzeBoneRadius(cgltf_data* data, std::vector<NodeInfo>& nodes, const std
 	}
 
 	// now, compute radius_scale and radius_tree hierarchically, starting from roots
+	float max_radius = 0;
+
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
 		cgltf_node* n = data->nodes + i;
@@ -178,6 +180,18 @@ void analyzeBoneRadius(cgltf_data* data, std::vector<NodeInfo>& nodes, const std
 			continue;
 
 		analyzeBone(data, n, nodes, 1.f);
+
+		max_radius = std::max(max_radius, nodes[i].radius_tree);
+	}
+
+	// finally, assign # of bits based on radii, taking the max. radius as a reference point
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		NodeInfo& ni = nodes[i];
+
+		int bits = 10 + log2(1.f + ni.radius_tree * ni.radius_scale / max_radius * 20);
+
+		ni.bits = std::min(bits, 16);
 	}
 }
 
