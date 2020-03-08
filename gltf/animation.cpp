@@ -6,6 +6,10 @@
 #include <math.h>
 #include <string.h>
 
+// TODO
+#include "../src/meshoptimizer.h"
+#include <stdio.h>
+
 static float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 {
 	switch (type)
@@ -305,4 +309,209 @@ void processAnimation(Animation& animation, const Settings& settings)
 			track.dummy = isTrackEqual(track.data, track.path, 1, &base[0], track.components);
 		}
 	}
+}
+
+static void roundtripTranslation(float r[3], const float f[3])
+{
+	r[0] = meshopt_quantizeFloat(f[0], 15);
+	r[1] = meshopt_quantizeFloat(f[1], 15);
+	r[2] = meshopt_quantizeFloat(f[2], 15);
+}
+
+static void encodeQuat(int16_t v[4], const float f[4], int bits)
+{
+	const float scaler = sqrtf(2.f);
+
+	// establish maximum quaternion component
+	int qc = 0;
+	qc = fabsf(f[1]) > fabsf(f[qc]) ? 1 : qc;
+	qc = fabsf(f[2]) > fabsf(f[qc]) ? 2 : qc;
+	qc = fabsf(f[3]) > fabsf(f[qc]) ? 3 : qc;
+
+	// we use double-cover properties to discard the sign
+	float sign = f[qc] < 0.f ? -1.f : 1.f;
+
+	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
+	v[0] = int16_t(meshopt_quantizeSnorm(f[(qc + 1) & 3] * scaler * sign, bits));
+	v[1] = int16_t(meshopt_quantizeSnorm(f[(qc + 2) & 3] * scaler * sign, bits));
+	v[2] = int16_t(meshopt_quantizeSnorm(f[(qc + 3) & 3] * scaler * sign, bits));
+	v[3] = int16_t((meshopt_quantizeSnorm(1.f, bits) & ~0xff) | qc);
+}
+
+static void decodeQuat(float r[4], const int16_t v[4])
+{
+	const float scale = 1.f / sqrtf(2.f);
+
+	static const int order[4][4] = {
+	    {1, 2, 3, 0},
+	    {2, 3, 0, 1},
+	    {3, 0, 1, 2},
+	    {0, 1, 2, 3},
+	};
+
+	// recover scale from the high byte of the component
+	int sf = v[3] | 0xff;
+	float ss = scale / float(sf);
+
+	// convert x/y/z to [-1..1] (scaled...)
+	float x = float(v[0]) * ss;
+	float y = float(v[1]) * ss;
+	float z = float(v[2]) * ss;
+
+	// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
+	float ww = 1.f - x * x - y * y - z * z;
+	float w = sqrtf(ww >= 0.f ? ww : 0.f);
+
+	// rounded signed float->int
+	int xf = int(x * 32767.f + (x >= 0.f ? 0.5f : -0.5f));
+	int yf = int(y * 32767.f + (y >= 0.f ? 0.5f : -0.5f));
+	int zf = int(z * 32767.f + (z >= 0.f ? 0.5f : -0.5f));
+	int wf = int(w * 32767.f + 0.5f);
+
+	int qc = v[3] & 3;
+
+	// output order is dictated by input index
+	r[order[qc][0]] = short(xf) / 32767.f;
+	r[order[qc][1]] = short(yf) / 32767.f;
+	r[order[qc][2]] = short(zf) / 32767.f;
+	r[order[qc][3]] = short(wf) / 32767.f;
+}
+
+static void roundtripRotation(float r[4], const float f[4])
+{
+	if (0)
+	{
+		r[0] = meshopt_quantizeSnorm(f[0], 16) / 32767.f;
+		r[1] = meshopt_quantizeSnorm(f[1], 16) / 32767.f;
+		r[2] = meshopt_quantizeSnorm(f[2], 16) / 32767.f;
+		r[3] = meshopt_quantizeSnorm(f[3], 16) / 32767.f;
+	}
+	else
+	{
+		int16_t v[4];
+		encodeQuat(v, f, 12);
+		decodeQuat(r, v);
+	}
+}
+
+static void roundtripScale(float r[3], const float f[3])
+{
+	r[0] = meshopt_quantizeFloat(f[0], 15);
+	r[1] = meshopt_quantizeFloat(f[1], 15);
+	r[2] = meshopt_quantizeFloat(f[2], 15);
+}
+
+void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, const Animation& animation)
+{
+	(void)nodes;
+
+	printf("Analyzing animation %s\n", animation.name ? animation.name : "?");
+
+	std::vector<cgltf_node> stash(data->nodes_count);
+	memcpy(&stash[0], data->nodes, sizeof(cgltf_node) * data->nodes_count);
+
+	std::vector<float> errors(data->nodes_count);
+	std::vector<float> positions(data->nodes_count * 3);
+
+	for (int i = 0; i < animation.frames; ++i)
+	{
+		// apply animation frame as is
+		for (size_t j = 0; j < animation.tracks.size(); ++j)
+		{
+			const Track& t = animation.tracks[j];
+			const Attr& a = t.dummy ? t.data[0] : t.data[i];
+
+			switch (t.path)
+			{
+			case cgltf_animation_path_type_translation:
+				t.node->translation[0] = a.f[0];
+				t.node->translation[1] = a.f[1];
+				t.node->translation[2] = a.f[2];
+				break;
+
+			case cgltf_animation_path_type_rotation:
+				t.node->rotation[0] = a.f[0];
+				t.node->rotation[1] = a.f[1];
+				t.node->rotation[2] = a.f[2];
+				t.node->rotation[3] = a.f[3];
+				break;
+
+			case cgltf_animation_path_type_scale:
+				t.node->scale[0] = a.f[0];
+				t.node->scale[1] = a.f[1];
+				t.node->scale[2] = a.f[2];
+				break;
+
+			default:;
+			}
+		}
+
+		// record world-space position of all nodes (doesn't account for skinning for leaves)
+		for (size_t j = 0; j < data->nodes_count; ++j)
+		{
+			float transform[16];
+			cgltf_node_transform_world(data->nodes + j, transform);
+
+			positions[j * 3 + 0] = transform[12];
+			positions[j * 3 + 1] = transform[13];
+			positions[j * 3 + 2] = transform[14];
+		}
+
+		// apply animation frame with quantization
+		for (size_t j = 0; j < animation.tracks.size(); ++j)
+		{
+			const Track& t = animation.tracks[j];
+			const Attr& a = t.dummy ? t.data[0] : t.data[i];
+
+			switch (t.path)
+			{
+			case cgltf_animation_path_type_translation:
+				roundtripTranslation(t.node->translation, a.f);
+				break;
+
+			case cgltf_animation_path_type_rotation:
+				roundtripRotation(t.node->rotation, a.f);
+				break;
+
+			case cgltf_animation_path_type_scale:
+				roundtripScale(t.node->scale, a.f);
+				break;
+
+			default:;
+			}
+		}
+
+		// record world-space position errors
+		for (size_t j = 0; j < data->nodes_count; ++j)
+		{
+			float transform[16];
+			cgltf_node_transform_world(data->nodes + j, transform);
+
+			float dx = positions[j * 3 + 0] - transform[12];
+			float dy = positions[j * 3 + 1] - transform[13];
+			float dz = positions[j * 3 + 2] - transform[14];
+
+			float e = sqrtf(dx * dx + dy * dy + dz * dz);
+
+			errors[j] = std::max(errors[j], e);
+		}
+	}
+
+	size_t maxj = 0;
+
+	for (size_t j = 0; j < data->nodes_count; ++j)
+	{
+		cgltf_node* node = data->nodes + j;
+
+		printf("Node %s: error %f\n", node->name ? node->name : "?", errors[j]);
+
+		if (errors[j] > errors[maxj])
+			maxj = j;
+	}
+
+	cgltf_node* maxnode = data->nodes + maxj;
+
+	printf("Max error: node %s, error %f\n", maxnode->name ? maxnode->name : "?", errors[maxj]);
+
+	memcpy(data->nodes, &stash[0], sizeof(cgltf_node) * data->nodes_count);
 }

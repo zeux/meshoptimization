@@ -239,6 +239,8 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 void analyzeBoneRadius(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes);
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
 
+void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, const Animation& animation);
+
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
 void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp);

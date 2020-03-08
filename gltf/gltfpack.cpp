@@ -199,7 +199,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
-	analyzeBoneRadius(data, nodes, meshes);
+	if (1)
+	{
+		analyzeBoneRadius(data, nodes, meshes);
+
+		for (size_t i = 0; i < animations.size(); ++i)
+		{
+			analyzeAnimation(data, nodes, animations[i]);
+		}
+	}
 
 	std::vector<ImageInfo> images(data->images_count);
 
