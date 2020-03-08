@@ -405,6 +405,34 @@ static void roundtripScale(float r[3], const float f[3], const Settings& setting
 	r[2] = meshopt_quantizeFloat(f[2], bits);
 }
 
+static void q2m(float m[16], const float q[4])
+{
+	float qx = q[0];
+	float qy = q[1];
+	float qz = q[2];
+	float qw = q[3];
+
+	m[0] = (1 - 2 * qy*qy - 2 * qz*qz);
+	m[1] = (2 * qx*qy + 2 * qz*qw);
+	m[2] = (2 * qx*qz - 2 * qy*qw);
+	m[3] = 0.f;
+
+	m[4] = (2 * qx*qy - 2 * qz*qw);
+	m[5] = (1 - 2 * qx*qx - 2 * qz*qz);
+	m[6] = (2 * qy*qz + 2 * qx*qw);
+	m[7] = 0.f;
+
+	m[8] = (2 * qx*qz + 2 * qy*qw);
+	m[9] = (2 * qy*qz - 2 * qx*qw);
+	m[10] = (1 - 2 * qx*qx - 2 * qy*qy);
+	m[11] = 0.f;
+
+	m[12] = 0.f;
+	m[13] = 0.f;
+	m[14] = 0.f;
+	m[15] = 1.f;
+}
+
 void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, const Animation& animation, const Settings& settings)
 {
 	(void)nodes;
@@ -514,13 +542,33 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 
 				size_t ni = t.node - data->nodes;
 
-				float d = getDelta(r, a, cgltf_animation_path_type_rotation);
-				float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
+				if (0)
+				{
+					float d = getDelta(r, a, cgltf_animation_path_type_rotation);
+					float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
 
-				// d = angular error / 2; convert to linear error at radius r
-				float e = sinf(d) * R;
+					// d = angular error / 2; convert to linear error at radius r
+					float e = sinf(d) * R;
 
-				errorest[ni] = std::max(errorest[ni], e);
+					errorest[ni] = std::max(errorest[ni], e);
+				}
+				else
+				{
+					float m1[16], m2[16];
+					q2m(m1, a.f);
+					q2m(m2, r.f);
+
+					float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
+
+					int c = 0;
+					float ex = m1[0 + c] * R - m2[0 + c] * R;
+					float ey = m1[4 + c] * R - m2[4 + c] * R;
+					float ez = m1[8 + c] * R - m2[8 + c] * R;
+
+					float e = sqrtf(ex * ex + ey * ey + ez * ez);
+
+					errorest[ni] = std::max(errorest[ni], e);
+				}
 			}
 		}
 	}
