@@ -542,13 +542,16 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 
 				size_t ni = t.node - data->nodes;
 
-				if (0)
-				{
-					float d = getDelta(r, a, cgltf_animation_path_type_rotation);
-					float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
+				float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
 
-					// d = angular error / 2; convert to linear error at radius r
-					float e = sinf(d) * R;
+				if (1)
+				{
+					// d = cos(angle / 2)
+					float d = fabsf(a.f[0] * r.f[0] + a.f[1] * r.f[1] + a.f[2] * r.f[2] + a.f[3] * r.f[3]);
+					d /= sqrtf(r.f[0] * r.f[0] + r.f[1] * r.f[1] + r.f[2] * r.f[2] + r.f[3] * r.f[3]);
+
+					// sin(angle / 2) * R * 2 is linear error
+					float e = sqrtf(std::max(0.f, 1.f - d * d)) * R * 2;
 
 					errorest[ni] = std::max(errorest[ni], e);
 				}
@@ -557,8 +560,6 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 					float m1[16], m2[16];
 					q2m(m1, a.f);
 					q2m(m2, r.f);
-
-					float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
 
 					int c = 0;
 					float ex = m1[0 + c] * R - m2[0 + c] * R;
@@ -580,6 +581,7 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 	{
 		cgltf_node* node = data->nodes + j;
 
+		if (0)
 		printf("Node %s: error %f (est %f), radius %f, tree %f\n",
 			node->name ? node->name : "?",
 			errors[j], errorest[j],
