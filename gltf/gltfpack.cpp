@@ -205,7 +205,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		for (size_t i = 0; i < animations.size(); ++i)
 		{
-			analyzeAnimation(data, nodes, animations[i]);
+			analyzeAnimation(data, nodes, animations[i], settings);
 		}
 	}
 

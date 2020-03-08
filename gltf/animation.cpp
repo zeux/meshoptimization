@@ -311,11 +311,13 @@ void processAnimation(Animation& animation, const Settings& settings)
 	}
 }
 
-static void roundtripTranslation(float r[3], const float f[3])
+static void roundtripTranslation(float r[3], const float f[3], const Settings& settings)
 {
-	r[0] = meshopt_quantizeFloat(f[0], 15);
-	r[1] = meshopt_quantizeFloat(f[1], 15);
-	r[2] = meshopt_quantizeFloat(f[2], 15);
+	int bits = settings.trn_bits - 9;
+
+	r[0] = meshopt_quantizeFloat(f[0], bits);
+	r[1] = meshopt_quantizeFloat(f[1], bits);
+	r[2] = meshopt_quantizeFloat(f[2], bits);
 }
 
 static void encodeQuat(int16_t v[4], const float f[4], int bits)
@@ -377,31 +379,33 @@ static void decodeQuat(float r[4], const int16_t v[4])
 	r[order[qc][3]] = short(wf) / 32767.f;
 }
 
-static void roundtripRotation(float r[4], const float f[4])
+static void roundtripRotation(float r[4], const float f[4], const Settings& settings)
 {
-	if (0)
+	if (settings.compressmore)
+	{
+		int16_t v[4];
+		encodeQuat(v, f, settings.rot_bits);
+		decodeQuat(r, v);
+	}
+	else
 	{
 		r[0] = meshopt_quantizeSnorm(f[0], 16) / 32767.f;
 		r[1] = meshopt_quantizeSnorm(f[1], 16) / 32767.f;
 		r[2] = meshopt_quantizeSnorm(f[2], 16) / 32767.f;
 		r[3] = meshopt_quantizeSnorm(f[3], 16) / 32767.f;
 	}
-	else
-	{
-		int16_t v[4];
-		encodeQuat(v, f, 12);
-		decodeQuat(r, v);
-	}
 }
 
-static void roundtripScale(float r[3], const float f[3])
+static void roundtripScale(float r[3], const float f[3], const Settings& settings)
 {
-	r[0] = meshopt_quantizeFloat(f[0], 15);
-	r[1] = meshopt_quantizeFloat(f[1], 15);
-	r[2] = meshopt_quantizeFloat(f[2], 15);
+	int bits = settings.scl_bits - 9;
+
+	r[0] = meshopt_quantizeFloat(f[0], bits);
+	r[1] = meshopt_quantizeFloat(f[1], bits);
+	r[2] = meshopt_quantizeFloat(f[2], bits);
 }
 
-void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, const Animation& animation)
+void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, const Animation& animation, const Settings& settings)
 {
 	(void)nodes;
 
@@ -466,15 +470,15 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 			switch (t.path)
 			{
 			case cgltf_animation_path_type_translation:
-				roundtripTranslation(t.node->translation, a.f);
+				roundtripTranslation(t.node->translation, a.f, settings);
 				break;
 
 			case cgltf_animation_path_type_rotation:
-				roundtripRotation(t.node->rotation, a.f);
+				roundtripRotation(t.node->rotation, a.f, settings);
 				break;
 
 			case cgltf_animation_path_type_scale:
-				roundtripScale(t.node->scale, a.f);
+				roundtripScale(t.node->scale, a.f, settings);
 				break;
 
 			default:;
