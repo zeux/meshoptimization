@@ -414,6 +414,7 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 	std::vector<cgltf_node> stash(data->nodes_count);
 	memcpy(&stash[0], data->nodes, sizeof(cgltf_node) * data->nodes_count);
 
+	std::vector<float> errorest(data->nodes_count);
 	std::vector<float> errors(data->nodes_count);
 	std::vector<float> positions(data->nodes_count * 3);
 
@@ -499,23 +500,55 @@ void analyzeAnimation(cgltf_data* data, const std::vector<NodeInfo>& nodes, cons
 
 			errors[j] = std::max(errors[j], e);
 		}
+
+		// compute estimated errors just from rotation data
+		for (size_t j = 0; j < animation.tracks.size(); ++j)
+		{
+			const Track& t = animation.tracks[j];
+			const Attr& a = t.dummy ? t.data[0] : t.data[i];
+
+			if (t.path == cgltf_animation_path_type_rotation)
+			{
+				Attr r;
+				roundtripRotation(r.f, a.f, settings);
+
+				size_t ni = t.node - data->nodes;
+
+				float d = getDelta(r, a, cgltf_animation_path_type_rotation);
+				float R = nodes[ni].radius_tree * nodes[ni].radius_scale;
+
+				// d = angular error / 2; convert to linear error at radius r
+				float e = sinf(d) * R;
+
+				errorest[ni] = std::max(errorest[ni], e);
+			}
+		}
 	}
 
 	size_t maxj = 0;
+	size_t maxest = 0;
 
 	for (size_t j = 0; j < data->nodes_count; ++j)
 	{
 		cgltf_node* node = data->nodes + j;
 
-		printf("Node %s: error %f\n", node->name ? node->name : "?", errors[j]);
+		printf("Node %s: error %f (est %f), radius %f, tree %f\n",
+			node->name ? node->name : "?",
+			errors[j], errorest[j],
+			nodes[j].radius_self * nodes[j].radius_scale,
+			nodes[j].radius_tree * nodes[j].radius_scale);
 
 		if (errors[j] > errors[maxj])
 			maxj = j;
+		if (errorest[j] > errorest[maxest])
+			maxest = j;
 	}
 
 	cgltf_node* maxnode = data->nodes + maxj;
+	cgltf_node* maxestnode = data->nodes + maxest;
 
 	printf("Max error: node %s, error %f\n", maxnode->name ? maxnode->name : "?", errors[maxj]);
+	printf("Max est error: node %s, error %f\n", maxestnode->name ? maxestnode->name : "?", errorest[maxest]);
 
 	memcpy(data->nodes, &stash[0], sizeof(cgltf_node) * data->nodes_count);
 }
