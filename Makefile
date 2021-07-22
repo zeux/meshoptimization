@@ -25,6 +25,16 @@ LDFLAGS=
 
 $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
 
+ifdef BASISU
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU
+    $(BUILD)/gltf/basisenc.cpp.o: CXXFLAGS+=-I$(BASISU)
+    gltfpack: LDFLAGS+=-lpthread
+
+    ifeq ($(HOSTTYPE),x86_64)
+        $(BUILD)/gltf/basisenc.cpp.o: CXXFLAGS+=-msse4.1
+    endif
+endif
+
 WASMCC=clang++
 WASI_SDK=
 
