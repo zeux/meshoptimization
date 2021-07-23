@@ -187,8 +187,11 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
-	append(json, ",\"texCoord\":");
-	append(json, size_t(view.texcoord));
+	if (view.texcoord != 0)
+	{
+		append(json, ",\"texCoord\":");
+		append(json, size_t(view.texcoord));
+	}
 	if (scale && view.scale != 1)
 	{
 		append(json, ",\"");
@@ -638,8 +641,11 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 
 	append(json, "{\"buffer\":");
 	append(json, buffer);
-	append(json, ",\"byteOffset\":");
-	append(json, bin_offset);
+	if (bin_offset != 0)
+	{
+		append(json, ",\"byteOffset\":");
+		append(json, bin_offset);
+	}
 	append(json, ",\"byteLength\":");
 	append(json, bin_size);
 	if (kind == BufferView::Kind_Vertex)
@@ -683,8 +689,11 @@ static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_t
 {
 	append(json, "{\"bufferView\":");
 	append(json, view);
-	append(json, ",\"byteOffset\":");
-	append(json, offset);
+	if (offset != 0)
+	{
+		append(json, ",\"byteOffset\":");
+		append(json, offset);
+	}
 	append(json, ",\"componentType\":");
 	append(json, componentType(component_type));
 	append(json, ",\"count\":");
